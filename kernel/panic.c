@@ -624,6 +624,21 @@ void panic(const char *fmt, ...)
 	va_list args;
 
 	va_start(args, fmt);
+
+	/*
+	 * TB375FC 诊断（2026-11-14）：SP_EL1 在 EL1 不可写（会 UNDEF），
+	 * 因此改用 SP_EL0 记录 panic 调用者，并在本函数内独立停驻。
+	 * TF-A 的 WDT dump：pc 指向本停驻点表示"显式 panic 通道"，
+	 * sp_el0 即调用者地址；若 pc 指向 die() 内的停驻点，则为故障通道。
+	 */
+	asm volatile(
+		"msr	daifset, #0xf\n"
+		"msr	sp_el0, %0\n"
+		"1:	wfe\n"
+		"b	1b\n"
+		:: "r"((unsigned long)__builtin_return_address(0))
+		: "memory");
+
 	vpanic(fmt, args);
 	va_end(args);
 }

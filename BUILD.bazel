@@ -3666,3 +3666,57 @@ kernel_build(
     trim_nonlisted_kmi = False,
     visibility = ["//visibility:public"],
 )
+
+# TB375FC 厂商配置验证目标（6.18 移植专用，2026-11-10 添加）。
+# 以 MTK 6.1 的 mgk_64_k61_defconfig 为基线，叠加设备增量 tb375fc_defconfig，
+# 用于验证"用厂商编译选项能否越过 6.18 的早期停止点"。
+kernel_build(
+    name = "kernel_aarch64_tb375fc_vendor",
+    srcs = [
+        ":common_kernel_sources",
+        # 厂商 Kconfig 树（含 Kconfig.ext 及其 source 的子 Kconfig、defconfig）。
+        # 不作为内核源码 overlay 使用：厂商驱动全部经 //common-modules/mediatek
+        # 的 kernel_module 以外部模块方式构建。
+        "//common-modules/mediatek/kernel_device_modules-6.1:mgk_configs",
+    ],
+    outs = [
+        "Image",
+        "Image.lz4",
+        "System.map",
+        "vmlinux",
+        "vmlinux.symvers",
+    ],
+    arch = "arm64",
+    # 厂商变量（DEVICE_MODULES_PATH / REL_DIR / DEVCIE_MODULES_INCLUDE）由
+    # 该 build config 导出；否则外部模块构建找不到模块树私有头文件。
+    build_config = "//common-modules/mediatek:build.config.mgk.aarch64",
+    check_defconfig = "disabled",
+    # 与 6.1 厂商流程一致：先 gki_defconfig，再把厂商 mgk_64_k61_defconfig
+    # 合并上去（merge_config.sh 覆盖同名项）。
+    #
+    # 顺序很关键：厂商 defconfig 里大量 `=m` 项必须在 CONFIG_MODULES=y 之后
+    # 才被 kconfig 接受。旧流程通过先合并 gki_defconfig 满足这一点；若直接把
+    # 厂商 defconfig 当 base，kconfig 在读到 CONFIG_MODULES 之前会把所有 `=m`
+    # 判为无效（结果 649 个 =m 全变成 =y，外部模块一个 .ko 都产不出来）。
+    defconfig = "arch/arm64/configs/gki_defconfig",
+    pre_defconfig_fragments = [
+        "//common-modules/mediatek/kernel_device_modules-6.1:arch/arm64/configs/mgk_64_k61_defconfig",
+        "//common-modules/mediatek/kernel_device_modules-6.1:kernel/configs/mgk_debug_min.config",
+    ],
+    # 没有 Kconfig.ext 时 olddefconfig 会把 mgk_64_k61_defconfig 里所有
+    # MTK 私有符号当成未知符号丢弃，厂商驱动的 obj-$(CONFIG_...) 全部不成立。
+    kconfig_ext = "//common-modules/mediatek/kernel_device_modules-6.1:Kconfig.ext",
+    makefile = ":Makefile",
+    make_goals = [
+        "Image",
+        "Image.lz4",
+    ],
+    post_defconfig_fragments = [
+        "//device/tb375fc:tb375fc_device.config",
+        "//device/tb375fc:tb375fc_debug.config",
+        # 修正厂商 defconfig 中依赖 DEVICE_MODULES_REL_DIR 的签名密钥路径。
+        "//common-modules/mediatek:mgk_64_k61_618.config",
+    ],
+    trim_nonlisted_kmi = False,
+    visibility = ["//visibility:public"],
+)

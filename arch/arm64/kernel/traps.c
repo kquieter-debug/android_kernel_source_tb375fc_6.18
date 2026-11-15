@@ -210,6 +210,20 @@ void die(const char *str, struct pt_regs *regs, long err)
 	int ret;
 	unsigned long flags;
 
+	/*
+	 * TB375FC 诊断（2026-11-14）：把原始故障 PC 写入 SP_EL0 后在本函数内停驻，
+	 * 从而不进入 die_lock/printk（避免嵌套异常时在锁上自旋）。
+	 * TF-A dump 的 pc 指向本停驻点即表示"故障通道"，sp_el0 为故障 PC。
+	 */
+	if (regs)
+		asm volatile(
+			"msr	sp_el0, %0\n"
+			"msr	daifset, #0xf\n"
+			"1:	wfe\n"
+			"b	1b\n"
+			:: "r"((unsigned long)regs->pc)
+			: "memory");
+
 	raw_spin_lock_irqsave(&die_lock, flags);
 
 	oops_enter();

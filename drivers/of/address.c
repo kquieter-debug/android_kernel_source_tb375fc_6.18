@@ -766,6 +766,19 @@ static int parser_init(struct of_pci_range_parser *parser,
 	parser->dma = !strcmp(name, "dma-ranges");
 	parser->bus = of_match_bus(node);
 
+	/*
+	 * TB375FC 修复（2026-11-14）：6.18 起 of_match_bus() 在节点既非 PCI/ISA、
+	 * 又缺少 #address-cells 时返回 NULL（上游 6e5773d52f4a）。
+	 * 本机厂商 DT 的 gce@1e880000 / gce_m@1e990000 等节点带 dma-ranges
+	 * 却没有 #address-cells，而 of_pci_range_parser_one() 会解引用
+	 * parser->bus->flag_cells，导致 setup_arch 内空指针 fault。
+	 * 这里按"不可翻译"处理：保持 parser->range 为 NULL，让 for_each_of_range 安全退出。
+	 */
+	if (!parser->bus) {
+		parser->range = NULL;
+		return -ENODEV;
+	}
+
 	parser->range = of_get_property(node, name, &rlen);
 	if (parser->range == NULL)
 		return -ENOENT;
