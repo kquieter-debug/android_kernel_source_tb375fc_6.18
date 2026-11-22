@@ -3677,7 +3677,7 @@ kernel_build(
         # 厂商 Kconfig 树（含 Kconfig.ext 及其 source 的子 Kconfig、defconfig）。
         # 不作为内核源码 overlay 使用：厂商驱动全部经 //common-modules/mediatek
         # 的 kernel_module 以外部模块方式构建。
-        "//common-modules/mediatek/kernel_device_modules-6.1:mgk_configs",
+        "//common-modules/mediatek/kernel_device_modules-6.18:mgk_configs",
     ],
     outs = [
         "Image",
@@ -3700,12 +3700,12 @@ kernel_build(
     # 判为无效（结果 649 个 =m 全变成 =y，外部模块一个 .ko 都产不出来）。
     defconfig = "arch/arm64/configs/gki_defconfig",
     pre_defconfig_fragments = [
-        "//common-modules/mediatek/kernel_device_modules-6.1:arch/arm64/configs/mgk_64_k61_defconfig",
-        "//common-modules/mediatek/kernel_device_modules-6.1:kernel/configs/mgk_debug_min.config",
+        "//common-modules/mediatek/kernel_device_modules-6.18:arch/arm64/configs/mgk_64_k61_defconfig",
+        "//common-modules/mediatek/kernel_device_modules-6.18:kernel/configs/mgk_debug_min.config",
     ],
     # 没有 Kconfig.ext 时 olddefconfig 会把 mgk_64_k61_defconfig 里所有
     # MTK 私有符号当成未知符号丢弃，厂商驱动的 obj-$(CONFIG_...) 全部不成立。
-    kconfig_ext = "//common-modules/mediatek/kernel_device_modules-6.1:Kconfig.ext",
+    kconfig_ext = "//common-modules/mediatek/kernel_device_modules-6.18:Kconfig.ext",
     makefile = ":Makefile",
     make_goals = [
         "Image",
