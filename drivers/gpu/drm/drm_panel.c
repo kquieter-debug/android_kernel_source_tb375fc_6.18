@@ -101,35 +101,27 @@ void drm_panel_remove(struct drm_panel *panel)
 }
 EXPORT_SYMBOL(drm_panel_remove);
 
-/**
- * drm_panel_prepare - power on a panel
- * @panel: DRM panel
- *
- * Calling this function will enable power and deassert any reset signals to
- * the panel. After this has completed it is possible to communicate with any
- * integrated circuitry via a command bus. This function cannot fail (as it is
- * called from the pre_enable call chain). There will always be a call to
- * drm_panel_disable() afterwards.
- */
-void drm_panel_prepare(struct drm_panel *panel)
+int drm_panel_prepare_ret(struct drm_panel *panel)
 {
 	struct drm_panel_follower *follower;
-	int ret;
+	int ret, err = 0;
 
 	if (!panel)
-		return;
+		return -EINVAL;
 
 	if (panel->prepared) {
 		dev_warn(panel->dev, "Skipping prepare of already prepared panel\n");
-		return;
+		return 0;
 	}
 
 	mutex_lock(&panel->follower_lock);
 
 	if (panel->funcs && panel->funcs->prepare) {
 		ret = panel->funcs->prepare(panel);
-		if (ret < 0)
+		if (ret < 0) {
+			err = ret;
 			goto exit;
+		}
 	}
 	panel->prepared = true;
 
@@ -145,25 +137,34 @@ void drm_panel_prepare(struct drm_panel *panel)
 
 exit:
 	mutex_unlock(&panel->follower_lock);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(drm_panel_prepare_ret);
+
+/**
+ * drm_panel_prepare - power on a panel
+ * @panel: DRM panel
+ *
+ * Calling this function will enable power and deassert any reset signals to
+ * the panel. After this has completed it is possible to communicate with any
+ * integrated circuitry via a command bus. This function cannot fail (as it is
+ * called from the pre_enable call chain). There will always be a call to
+ * drm_panel_disable() afterwards.
+ */
+void drm_panel_prepare(struct drm_panel *panel)
+{
+	drm_panel_prepare_ret(panel);
 }
 EXPORT_SYMBOL(drm_panel_prepare);
 
-/**
- * drm_panel_unprepare - power off a panel
- * @panel: DRM panel
- *
- * Calling this function will completely power off a panel (assert the panel's
- * reset, turn off power supplies, ...). After this function has completed, it
- * is usually no longer possible to communicate with the panel until another
- * call to drm_panel_prepare().
- */
-void drm_panel_unprepare(struct drm_panel *panel)
+int drm_panel_unprepare_ret(struct drm_panel *panel)
 {
 	struct drm_panel_follower *follower;
-	int ret;
+	int ret, err = 0;
 
 	if (!panel)
-		return;
+		return -EINVAL;
 
 	/*
 	 * If you are seeing the warning below it likely means one of two things:
@@ -176,7 +177,7 @@ void drm_panel_unprepare(struct drm_panel *panel)
 	 */
 	if (!panel->prepared) {
 		dev_warn(panel->dev, "Skipping unprepare of already unprepared panel\n");
-		return;
+		return 0;
 	}
 
 	mutex_lock(&panel->follower_lock);
@@ -193,45 +194,56 @@ void drm_panel_unprepare(struct drm_panel *panel)
 
 	if (panel->funcs && panel->funcs->unprepare) {
 		ret = panel->funcs->unprepare(panel);
-		if (ret < 0)
+		if (ret < 0) {
+			err = ret;
 			goto exit;
+		}
 	}
 	panel->prepared = false;
 
 exit:
 	mutex_unlock(&panel->follower_lock);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(drm_panel_unprepare_ret);
+
+/**
+ * drm_panel_unprepare - power off a panel
+ * @panel: DRM panel
+ *
+ * Calling this function will completely power off a panel (assert the panel's
+ * reset, turn off power supplies, ...). After this function has completed, it
+ * is usually no longer possible to communicate with the panel until another
+ * call to drm_panel_prepare().
+ */
+void drm_panel_unprepare(struct drm_panel *panel)
+{
+	drm_panel_unprepare_ret(panel);
 }
 EXPORT_SYMBOL(drm_panel_unprepare);
 
-/**
- * drm_panel_enable - enable a panel
- * @panel: DRM panel
- *
- * Calling this function will cause the panel display drivers to be turned on
- * and the backlight to be enabled. Content will be visible on screen after
- * this call completes. This function cannot fail (as it is called from the
- * enable call chain). There will always be a call to drm_panel_disable()
- * afterwards.
- */
-void drm_panel_enable(struct drm_panel *panel)
+int drm_panel_enable_ret(struct drm_panel *panel)
 {
 	struct drm_panel_follower *follower;
-	int ret;
+	int ret, err = 0;
 
 	if (!panel)
-		return;
+		return -EINVAL;
 
 	if (panel->enabled) {
 		dev_warn(panel->dev, "Skipping enable of already enabled panel\n");
-		return;
+		return 0;
 	}
 
 	mutex_lock(&panel->follower_lock);
 
 	if (panel->funcs && panel->funcs->enable) {
 		ret = panel->funcs->enable(panel);
-		if (ret < 0)
+		if (ret < 0) {
+			err = ret;
 			goto exit;
+		}
 	}
 	panel->enabled = true;
 
@@ -252,24 +264,34 @@ void drm_panel_enable(struct drm_panel *panel)
 
 exit:
 	mutex_unlock(&panel->follower_lock);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(drm_panel_enable_ret);
+
+/**
+ * drm_panel_enable - enable a panel
+ * @panel: DRM panel
+ *
+ * Calling this function will cause the panel display drivers to be turned on
+ * and the backlight to be enabled. Content will be visible on screen after
+ * this call completes. This function cannot fail (as it is called from the
+ * enable call chain). There will always be a call to drm_panel_disable()
+ * afterwards.
+ */
+void drm_panel_enable(struct drm_panel *panel)
+{
+	drm_panel_enable_ret(panel);
 }
 EXPORT_SYMBOL(drm_panel_enable);
 
-/**
- * drm_panel_disable - disable a panel
- * @panel: DRM panel
- *
- * This will typically turn off the panel's backlight or disable the display
- * drivers. For smart panels it should still be possible to communicate with
- * the integrated circuitry via any command bus after this call.
- */
-void drm_panel_disable(struct drm_panel *panel)
+int drm_panel_disable_ret(struct drm_panel *panel)
 {
 	struct drm_panel_follower *follower;
-	int ret;
+	int ret, err = 0;
 
 	if (!panel)
-		return;
+		return -EINVAL;
 
 	/*
 	 * If you are seeing the warning below it likely means one of two things:
@@ -282,7 +304,7 @@ void drm_panel_disable(struct drm_panel *panel)
 	 */
 	if (!panel->enabled) {
 		dev_warn(panel->dev, "Skipping disable of already disabled panel\n");
-		return;
+		return 0;
 	}
 
 	mutex_lock(&panel->follower_lock);
@@ -304,13 +326,31 @@ void drm_panel_disable(struct drm_panel *panel)
 
 	if (panel->funcs && panel->funcs->disable) {
 		ret = panel->funcs->disable(panel);
-		if (ret < 0)
+		if (ret < 0) {
+			err = ret;
 			goto exit;
+		}
 	}
 	panel->enabled = false;
 
 exit:
 	mutex_unlock(&panel->follower_lock);
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(drm_panel_disable_ret);
+
+/**
+ * drm_panel_disable - disable a panel
+ * @panel: DRM panel
+ *
+ * This will typically turn off the panel's backlight or disable the display
+ * drivers. For smart panels it should still be possible to communicate with
+ * the integrated circuitry via any command bus after this call.
+ */
+void drm_panel_disable(struct drm_panel *panel)
+{
+	drm_panel_disable_ret(panel);
 }
 EXPORT_SYMBOL(drm_panel_disable);
 
