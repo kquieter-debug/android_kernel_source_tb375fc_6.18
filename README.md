@@ -1,183 +1,146 @@
-# How do I submit patches to Android Common Kernels
+# Lenovo TB375FC (联想小新Pad Pro 12.7 2025) 移植 android-17-6.18-lts 内核源码
 
-1. BEST: Make all of your changes to upstream Linux. If appropriate, backport to the stable releases.
-   These patches will be merged automatically in the corresponding common kernels. If the patch is already
-   in upstream Linux, post a backport of the patch that conforms to the patch requirements below.
-   - Do not send patches upstream that contain only symbol exports. To be considered for upstream Linux,
-additions of `EXPORT_SYMBOL_GPL()` require an in-tree modular driver that uses the symbol -- so include
-the new driver or changes to an existing driver in the same patchset as the export.
-   - When sending patches upstream, the commit message must contain a clear case for why the patch
-is needed and beneficial to the community. Enabling out-of-tree drivers or functionality is not
-a persuasive case.
+[English](README_en.md) | **简体中文**
 
-2. LESS GOOD: Develop your patches out-of-tree (from an upstream Linux point-of-view). Unless these are
-   fixing an Android-specific bug, these are very unlikely to be accepted unless they have been
-   coordinated with kernel-team@android.com. If you want to proceed, post a patch that conforms to the
-   patch requirements below.
+> 本仓库派生自 Google Android 通用内核（GKI）`android-17-6.18-lts`   
+> 目标是把 TB375FC 设备的 KMI 基线由 `android14-6.1` 提升到 `android17-6.18`
+>
+> 本仓库只包含内核源码本身，**不包含** 谷歌分发的 Kleaf 构建平台，也不含厂商驱动  
+> 内核模块树详见我的仓库: [android_kernel_modules_tb375fc_6.18](https://github.com/kquieter-debug/android_kernel_modules_tb375fc_6.18)
 
-# Common Kernel patch requirements
+## 尚未完成移植，请勿在生产环境使用
 
-- All patches must conform to the Linux kernel coding standards and pass `scripts/checkpatch.pl`
-- Patches shall not break gki_defconfig or allmodconfig builds for arm, arm64, x86, x86_64 architectures
-(see  https://source.android.com/setup/build/building-kernels)
-- If the patch is not merged from an upstream branch, the subject must be tagged with the type of patch:
-`UPSTREAM:`, `BACKPORT:`, `FROMGIT:`, `FROMLIST:`, or `ANDROID:`.
-- All patches must have a `Change-Id:` tag (see https://gerrit-review.googlesource.com/Documentation/user-changeid.html)
-- If an Android bug has been assigned, there must be a `Bug:` tag.
-- All patches must have a `Signed-off-by:` tag by the author and the submitter
+## 仓库说明
 
-Additional requirements are listed below based on patch type
+本仓库对应 Kleaf 工作区的 `/common` 子目录（工作区根目录在下文中记为 `6.18`），
+是内核源码树本体  
+厂商驱动以 Kleaf 外部模块（external module）方式构建，均位于 `common-modules/mediatek`，不应当作为内核源码 overlay 合入本树  
+原始上游内核说明详见: [`README_android_kernel`](README_android_kernel) 与 [`README_linux_kernel`](README_linux_kernel) 
 
-## Requirements for backports from mainline Linux: `UPSTREAM:`, `BACKPORT:`
+本仓库相对上游 GKI 的改动集中在 `BUILD.bazel`：新增 `kernel_aarch64_tb375fc_min`、
+`kernel_aarch64_tb375fc_vendor`、`kernel_aarch64_tb375fc_p1` 三个 `kernel_build` 目标，用于按不同配置验证 6.18 内核的可启动性  
+与这三者相关的配置文件分布如下：
 
-- If the patch is a cherry-pick from Linux mainline with no changes at all
-    - tag the patch subject with `UPSTREAM:`.
-    - add upstream commit information with a `(cherry picked from commit ...)` line
-    - if applicable, prefer to cherry-pick the commit from the corresponding LTS branch.
-    - append new signature tags (e.g. `Bug:`, `Change-Id:`, etc.) at the end to keep the
-      chronological order.
-    - Example:
-        - if the upstream commit message is
+- `device/tb375fc/tb375fc_device.config`（三条 6.18 移植决策）已随厂商驱动版本化，
+  位于 `common-modules/mediatek/device/tb375fc/`；
+- 设备树源文件位于厂商模块树的 `arch/arm64/boot/dts/mediatek/`（本机机型对应的设备树为
+  `tb8792p1_64.dts`），当前 Kleaf 目标尚未定义 DTB 产物
+
+## Kleaf 构建平台搭建
+
+使用 repo 拉取谷歌分发的完整内核构建平台:
+
 ```
-        important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        UPSTREAM: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+repo init -u https://android.googlesource.com/kernel/manifest -b common-android17-6.18-lts
 ```
 
-- If the patch requires any changes from the upstream version, tag the patch with `BACKPORT:`
-instead of `UPSTREAM:`.
-    - use the same tags as `UPSTREAM:`
-    - add comments about the changes under the `(cherry picked from commit ...)` line
-    - Example:
+在使用 repo sync 之前，需要在工作区根目录下创建 `.repo/local_manifests/replace_common.xml`，内容如下：
+
 ```
-        BACKPORT: important patch from upstream
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remove-project name="kernel/common" />
 
-        This is the detailed description of the important patch
+  <project path="common"
+           name="android_kernel_modules_tb375fc_6.18"
+           remote="third-party-kernel"
+           revision="main" />
 
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        (cherry picked from commit c31e73121f4c1ec41143423ac6ce3ce6dafdcec1)
-        [joe: Resolved minor conflict in drivers/foo/bar.c ]
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
-```
-
-## Requirements for other backports: `FROMGIT:`, `FROMLIST:`,
-
-- If the patch has been merged into an upstream maintainer tree, but has not yet
-been merged into Linux mainline
-    - tag the patch subject with `FROMGIT:`
-    - add info on where the patch came from as `(cherry picked from commit <sha1> <repo> <branch>)`.
-This must be a branch on a tree which is normally merged into Linus's tree and is not rebased. For
-example, don't use `linux-next` which is rebased and never directly merged into Linus's tree, but
-you *can* use SHAs from `net` *or* `net-next`, which are merged into Linus's tree at various points
-in the release.
-    - if changes were required, use `BACKPORT: FROMGIT:`
-    - Example:
-        - if the commit message in the maintainer tree is
-```
-        important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-```
->- then Joe Smith would upload the patch for the common kernel as
-```
-        FROMGIT: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        (cherry picked from commit 878a2fd9de10b03d11d2f622250285c7e63deace
-         https://git.kernel.org/pub/scm/linux/kernel/git/foo/bar.git test-branch)
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+  <remote name="third-party-kernel"
+          fetch="https://github.com/kquieter-debug"
+          review="https://github.com/kquieter-debug" />
+</manifest>
 ```
 
+以此来替换原有的谷歌内核树拉取对象  
+然后可以执行同步 :
 
-- If the patch has been submitted to LKML, but not accepted into any maintainer tree
-    - tag the patch subject with `FROMLIST:`
-    - add a `Link:` tag with a link to the submittal on lore.kernel.org
-    - add a `Bug:` tag with the Android bug (required for patches not accepted into
-a maintainer tree)
-    - if changes were required, use `BACKPORT: FROMLIST:`
-    - Example:
 ```
-        FROMLIST: important patch from upstream
-
-        This is the detailed description of the important patch
-
-        Signed-off-by: Fred Jones <fred.jones@foo.org>
-
-        Bug: 135791357
-        Link: https://lore.kernel.org/lkml/20190619171517.GA17557@someone.com/
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+repo sync -j$(nproc)
 ```
 
-- If a patch has been submitted to the community, but rejected, do NOT use the
-  `FROMLIST:` tag to try to hide this fact.  Use the `ANDROID:` tag as
-  described below as this must be considered as an Android-specific submission,
-  not an upstream submission as the community will not accept these changes
-  as-is.
+或者
 
-## Requirements for Android-specific patches: `ANDROID:`
-
-- If the patch is fixing a bug to Android-specific code
-    - tag the patch subject with `ANDROID:`
-    - add a `Fixes:` tag that cites the patch with the bug
-    - Example:
 ```
-        ANDROID: fix android-specific bug in foobar.c
-
-        This is the detailed description of the important fix
-
-        Fixes: 1234abcd2468 ("foobar: add cool feature")
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+repo sync -j$(nproc) --no-tags --no-clone-bundle
 ```
 
-- If the patch is a new feature
-    - tag the patch subject with `ANDROID:`
-    - add a `Bug:` tag with the Android bug (required for android-specific features)
+来加速同步  
 
-## Requirements for revert patches:
+如果有内核模块同步的需要也同上文所述添加替换用清单
 
-- Add a reason for the revert
-- Do not delete or modify the revert information that is generated when using
-`git revert`
-- If modifications have been made after creating the revert, include a list of
-these in the commit message
-- Example:
+## 构建说明（Kleaf）
+
+所有命令在工作区根目录执行（下称 `6.18`），该目录下应当能看到 `common/`、
+`common-modules/`、`device/`、`build/`、`prebuilts/` 以及 `tools/bazel` 等
+
+```bash
+cd 6.18
+
+# 1) 纯 GKI 内核（最快，用于确认工具链与基线本身可用）
+tools/bazel build //common:kernel_aarch64 --config=fast
+
+# 2) 早期启动验证目标：仅在 GKI 基础上打开 CONFIG_ARCH_MEDIATEK
+tools/bazel build //common:kernel_aarch64_tb375fc_min --config=fast
+
+# 3) 厂商配置内核：先 gki_defconfig，再合并 mgk_64_k61_defconfig 与设备增量
+tools/bazel build //common:kernel_aarch64_tb375fc_vendor --config=fast
+
+# 4) P1 变体：额外编出 in-tree 模块，并生成非空 Module.symvers
+tools/bazel build //common:kernel_aarch64_tb375fc_p1 --config=fast
 ```
-        Revert "ANDROID: fix android-specific bug in foobar.c"
 
-        This reverts commit a57a7913f53e34c8a8d905444b126b3316146e69.
+内核产物默认在 `bazel-bin/common/<目标名>/` 下，例如
+`bazel-bin/common/kernel_aarch64_tb375fc_vendor/vmlinux`，包含
+`Image`、`Image.lz4`、`System.map`、`vmlinux`、`vmlinux.symvers`
 
-        Reason for revert: Breaks a lot of internal tests
+厂商模块的编译、安装布局、P1 子集与出包目标定义在厂商模块树中，本仓库不重复列出：
 
-        Additional modifications: Resolved merge conflicts
-
-        Bug: 135791357
-        Change-Id: I4caaaa566ea080fa148c5e768bb1a0b6f7201c01
-        Signed-off-by: Joe Smith <joe.smith@foo.org>
+```bash
+tools/bazel build //common-modules/mediatek:mgk_64_k61_modules_install --config=fast
+tools/bazel build //common-modules/mediatek:mgk_p1_modules_install --config=fast
+tools/bazel build //common-modules/mediatek:mgk_64_k61_images --config=fast
 ```
+
+> **注意**：`kernel_aarch64_tb375fc_vendor` 的 `make_goals` 不含 `modules`，其输出的
+> `Module.symvers` 恒为 0 字节；外部模块 modpost 需要用 `vmlinux.symvers` 顶替，
+> 或改用带 `modules` 目标的 `kernel_aarch64_tb375fc_p1`
+
+> **WSL 提示**：若 `tools/bazel` 因 musl 版 `py3-cmd` 与宿主 `LD_PRELOAD` 冲突而失败，
+> 可改用 glibc 版本：
+>
+> ```bash
+> prebuilts/build-tools/linux-x86/bin/py3-cmd build/kernel/kleaf/bazel.py build <target> --config=fast
+> ```
+
+## 构建说明（手动 kbuild + clang）
+
+内核本体建议始终走 Kleaf：目标里的 defconfig 合并顺序、`Kconfig.ext`、厂商变量
+（`DEVICE_MODULES_PATH` 等）都由 Kleaf 目标保证，手工复现容易得到一份 "看起来成功 但配置不对" 的内核
+
+手动 kbuild 主要用途是**一次性收集外部模块的全部编译错误**（Kleaf 每次只暴露少量），
+纯内核构建的要点只有三条：
+
+1. 先构建 `//common:kernel_aarch64_tb375fc_vendor_modules_prepare` 解出预置输出目录；
+2. 用 `vmlinux.symvers` 覆盖输出目录里的空 `Module.symvers`；
+3. 预置 clang 必须优先于宿主编译器，并清掉 `MAKEFLAGS`/`MFLAGS`
+
+## 初始官方基线
+
+在开始移植前的官方提交哈希为：`ed4489e76f6fafbe67b99e8a9419215313df189e` (`Merge android17-6.18 into android17-6.18-lts`，2026-11-05 16:43:55 UTC)  
+移植工作开始后会停滞上游补丁合并，直至确认内核可正常后才会开始接受上游补丁
+
+## 更多信息
+
+### 许可证
+
+遵循上游使用 GNU General Public License v2 (GPLv2 License) — 详见 [`COPYING`](COPYING).
+
+### 有关内核
+原始的上游内核说明，参见 [README_linux_kernel](README_linux_kernel) 以及 [README_android_kernel](README_android_kernel)  
+
+本内核源码派生自 Google Android 通用内核:
+`https://android.googlesource.com/kernel/common`  
+分支: `android-17-6.18-lts`
+
+---
