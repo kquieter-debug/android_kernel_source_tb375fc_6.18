@@ -3712,7 +3712,7 @@ kernel_build(
         "Image.lz4",
     ],
     post_defconfig_fragments = [
-        "//device/tb375fc:tb375fc_device.config",
+        "//common-modules/mediatek/device/tb375fc:tb375fc_device.config",
         "//device/tb375fc:tb375fc_debug.config",
         # 修正厂商 defconfig 中依赖 DEVICE_MODULES_REL_DIR 的签名密钥路径。
         "//common-modules/mediatek:mgk_64_k61_618.config",
@@ -3908,7 +3908,7 @@ kernel_build(
         "modules",
     ],
     post_defconfig_fragments = [
-        "//device/tb375fc:tb375fc_device.config",
+        "//common-modules/mediatek/device/tb375fc:tb375fc_device.config",
         "//device/tb375fc:tb375fc_debug.config",
         # 修正厂商 defconfig 中依赖 DEVICE_MODULES_REL_DIR 的签名密钥路径。
         "//common-modules/mediatek:mgk_64_k61_618.config",
