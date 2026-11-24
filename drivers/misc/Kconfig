@@ -114,6 +114,14 @@ config RPMB
 
 	  If unsure, select N.
 
+config RPMB_CORE_SEPARATE_CLASS
+	bool "Use a separate sysfs class for the kernel RPMB core"
+	depends on RPMB
+	help
+	  Name the kernel RPMB core class rpmb-core rather than rpmb.
+	  Use this on devices whose separate legacy userspace RPMB driver
+	  owns the rpmb class. This does not change the kernel RPMB API.
+
 config TI_FPC202
 	tristate "TI FPC202 Dual Port Controller"
 	depends on I2C

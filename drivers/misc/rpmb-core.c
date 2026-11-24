@@ -68,7 +68,7 @@ static void rpmb_dev_release(struct device *dev)
 }
 
 static struct class rpmb_class = {
-	.name = "rpmb",
+	.name = IS_ENABLED(CONFIG_RPMB_CORE_SEPARATE_CLASS) ? "rpmb-core" : "rpmb",
 	.dev_release = rpmb_dev_release,
 };
 
