@@ -8,6 +8,7 @@
 KCOV_INSTRUMENT_main.o := n
 
 obj-y += main.o
+obj-$(CONFIG_TB375FC_DIAG_FIRST_USB_LATCH) += tb375fc_first_usb_latch.o
 obj-y += strict_rwx.o
 obj-y += kmod.o
 obj-$(CONFIG_MODULE_DEBUG_AUTOLOAD_DUPS) += dups.o

@@ -61,6 +61,12 @@
 #include <linux/debugfs.h>
 #include <linux/execmem.h>
 #include <uapi/linux/module.h>
+#ifdef CONFIG_TB375FC_DIAG_FIRST_USB_LATCH
+#include <linux/file.h>
+#include <linux/namei.h>
+#include <linux/pid_namespace.h>
+#include <linux/tb375fc_diag.h>
+#endif
 #include "internal.h"
 
 #define CREATE_TRACE_POINTS
@@ -3760,6 +3766,55 @@ static int idempotent_init_module(struct file *f, const char __user * uargs, int
 	return idempotent_wait_for_completion(&idem);
 }
 
+#ifdef CONFIG_TB375FC_DIAG_FIRST_USB_LATCH
+static struct path tb375fc_diag_init_file __ro_after_init;
+static struct path tb375fc_diag_first_usb_file __ro_after_init;
+static atomic_t tb375fc_diag_seen = ATOMIC_INIT(0);
+
+int __init tb375fc_diag_pin_first_usb(const char *init_path)
+{
+	const unsigned int lookup = LOOKUP_NO_SYMLINKS | LOOKUP_NO_XDEV;
+	int ret;
+
+	/* Pin the forced initramfs objects before diagnostic userspace starts. */
+	ret = kern_path(init_path, lookup, &tb375fc_diag_init_file);
+	if (ret)
+		return ret;
+	ret = kern_path("/lib/modules/nvmem_mtk-devinfo.ko", lookup,
+			&tb375fc_diag_first_usb_file);
+	if (ret) {
+		path_put(&tb375fc_diag_init_file);
+		return ret;
+	}
+	if (!d_is_reg(tb375fc_diag_init_file.dentry) ||
+	    !d_is_reg(tb375fc_diag_first_usb_file.dentry)) {
+		path_put(&tb375fc_diag_first_usb_file);
+		path_put(&tb375fc_diag_init_file);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static void tb375fc_diag_check_first_usb(struct file *file, int flags)
+{
+	struct file *exe;
+	bool matches;
+
+	if (flags || !(file->f_mode & FMODE_READ) ||
+	    !is_global_init(current) || !task_is_in_init_pid_ns(current) ||
+	    !path_equal(&file->f_path, &tb375fc_diag_first_usb_file))
+		return;
+
+	exe = get_task_exe_file(current);
+	if (!exe)
+		return;
+	matches = path_equal(&exe->f_path, &tb375fc_diag_init_file);
+	fput(exe);
+	if (matches && !atomic_cmpxchg(&tb375fc_diag_seen, 0, 1))
+		tb375fc_first_usb_latch();
+}
+#endif
+
 SYSCALL_DEFINE3(finit_module, int, fd, const char __user *, uargs, int, flags)
 {
 	int err = may_init_module();
@@ -3776,6 +3831,9 @@ SYSCALL_DEFINE3(finit_module, int, fd, const char __user *, uargs, int, flags)
 	CLASS(fd, f)(fd);
 	if (fd_empty(f))
 		return -EBADF;
+#ifdef CONFIG_TB375FC_DIAG_FIRST_USB_LATCH
+	tb375fc_diag_check_first_usb(fd_file(f), flags);
+#endif
 	return idempotent_init_module(fd_file(f), uargs, flags);
 }
 

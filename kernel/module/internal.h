@@ -44,6 +44,10 @@ struct kernel_symbol {
 #endif
 };
 
+#ifdef CONFIG_TB375FC_DIAG_FIRST_USB_LATCH
+asmlinkage __noreturn void tb375fc_first_usb_latch(void);
+#endif
+
 extern struct mutex module_mutex;
 extern struct list_head modules;
 

@@ -104,6 +104,7 @@
 #include <linux/pidfs.h>
 #include <linux/ptdump.h>
 #include <linux/time_namespace.h>
+#include <linux/tb375fc_diag.h>
 #include <net/net_namespace.h>
 
 #include <asm/io.h>
@@ -161,7 +162,9 @@ static size_t initargs_offs;
 #endif
 
 static char *execute_command;
-static char *ramdisk_execute_command = "/init";
+#define TB375FC_DIAG_INIT "/tb375fc-diag-init"
+static char *ramdisk_execute_command = IS_ENABLED(CONFIG_TB375FC_DIAGNOSTIC_INITRAMFS) ?
+	TB375FC_DIAG_INIT : "/init";
 
 /*
  * Used to generate warnings if static_key manipulation functions are used
@@ -1627,6 +1630,13 @@ static int __ref kernel_init(void *unused)
 
 	do_sysctl_args();
 
+	if (IS_ENABLED(CONFIG_TB375FC_DIAGNOSTIC_INITRAMFS)) {
+		ret = run_init_process(TB375FC_DIAG_INIT);
+		if (ret)
+			panic("TB375FC diagnostic init exec failed: %d", ret);
+		return 0;
+	}
+
 	if (ramdisk_execute_command) {
 		ret = run_init_process(ramdisk_execute_command);
 		if (!ret)
@@ -1724,8 +1734,16 @@ static noinline void __init kernel_init_freeable(void)
 	 * the work
 	 */
 	int ramdisk_command_access;
-	ramdisk_command_access = init_eaccess(ramdisk_execute_command);
-	if (ramdisk_command_access != 0) {
+	if (IS_ENABLED(CONFIG_TB375FC_DIAGNOSTIC_INITRAMFS)) {
+		ramdisk_command_access = init_eaccess(TB375FC_DIAG_INIT);
+		if (ramdisk_command_access)
+			panic("TB375FC diagnostic init unavailable: %d", ramdisk_command_access);
+#ifdef CONFIG_TB375FC_DIAG_FIRST_USB_LATCH
+		ramdisk_command_access = tb375fc_diag_pin_first_usb(TB375FC_DIAG_INIT);
+		if (ramdisk_command_access)
+			panic("TB375FC diagnostic paths unavailable: %d", ramdisk_command_access);
+#endif
+	} else if ((ramdisk_command_access = init_eaccess(ramdisk_execute_command)) != 0) {
 		pr_warn("check access for rdinit=%s failed: %i, ignoring\n",
 			ramdisk_execute_command, ramdisk_command_access);
 		ramdisk_execute_command = NULL;

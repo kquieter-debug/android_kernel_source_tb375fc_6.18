@@ -3721,26 +3721,25 @@ kernel_build(
     visibility = ["//visibility:public"],
 )
 
-kernel_build(
-    name = "kernel_aarch64_tb375fc_p1",
-    srcs = [
+_TB375FC_P1_SRCS = [
         ":common_kernel_sources",
         # 厂商 Kconfig 树（含 Kconfig.ext 及其 source 的子 Kconfig、defconfig）。
         # 不作为内核源码 overlay 使用：厂商驱动全部经 //common-modules/mediatek
         # 的 kernel_module 以外部模块方式构建。
         "//common-modules/mediatek/kernel_device_modules-6.18:mgk_configs",
-    ],
-    outs = [
-        "Image",
-        "Image.lz4",
-        "System.map",
-        "vmlinux",
-        "vmlinux.symvers",
-        "Module.symvers",
-    ],
-    # 内置模块必须显式列出，否则 kleaf 拒绝（"built but not copied"）。
-    # 列表取自 2026-11-23 首次 P1 构建的报错输出。
-    module_outs = [
+]
+
+_TB375FC_P1_OUTS = [
+    "Image",
+    "Image.lz4",
+    "System.map",
+    "vmlinux",
+    "vmlinux.symvers",
+    "Module.symvers",
+]
+
+# In-tree modules must be declared or Kleaf rejects built-but-not-copied files.
+_TB375FC_P1_MODULE_OUTS = [
         "arch/arm64/geniezone/gzvm.ko",
         "drivers/android/binder/rust_binder.ko",
         "drivers/android/tests/binder_alloc_kunit.ko",
@@ -3876,44 +3875,48 @@ kernel_build(
         "net/wireless/cfg80211.ko",
         "sound/soc/soc-topology-test.ko",
         "sound/soc/soc-utils-test.ko",
-    ],
-    arch = "arm64",
-    # 厂商变量（DEVICE_MODULES_PATH / REL_DIR / DEVCIE_MODULES_INCLUDE）由
-    # 该 build config 导出；否则外部模块构建找不到模块树私有头文件。
-    build_config = "//common-modules/mediatek:build.config.mgk.aarch64",
-    check_defconfig = "disabled",
-    # 与 6.1 厂商流程一致：先 gki_defconfig，再把厂商 mgk_64_k61_defconfig
-    # 合并上去（merge_config.sh 覆盖同名项）。
-    #
-    # 顺序很关键：厂商 defconfig 里大量 `=m` 项必须在 CONFIG_MODULES=y 之后
-    # 才被 kconfig 接受。旧流程通过先合并 gki_defconfig 满足这一点；若直接把
-    # 厂商 defconfig 当 base，kconfig 在读到 CONFIG_MODULES 之前会把所有 `=m`
-    # 判为无效（结果 649 个 =m 全变成 =y，外部模块一个 .ko 都产不出来）。
-    defconfig = "arch/arm64/configs/gki_defconfig",
-    pre_defconfig_fragments = [
-        "//common-modules/mediatek/kernel_device_modules-6.18:arch/arm64/configs/mgk_64_k61_defconfig",
-        "//common-modules/mediatek/kernel_device_modules-6.18:kernel/configs/mgk_debug_min.config",
-    ],
-    # 没有 Kconfig.ext 时 olddefconfig 会把 mgk_64_k61_defconfig 里所有
-    # MTK 私有符号当成未知符号丢弃，厂商驱动的 obj-$(CONFIG_...) 全部不成立。
-    kconfig_ext = "//common-modules/mediatek/kernel_device_modules-6.18:Kconfig.ext",
-    makefile = ":Makefile",
-    # P1 子集验证目标：需要 "modules" 才能让 kleaf 由 modpost 生成非空的
-    # Module.symvers（否则只 touch 一个 0 字节文件，外部模块 modpost 全部
-    # undefined）。P1 还为 common RPMB core 使用独立设备类，
-    # 避免与原厂 RPMB 字符设备冲突。
-    make_goals = [
-        "Image",
-        "Image.lz4",
-        "modules",
-    ],
-    post_defconfig_fragments = [
-        "//common-modules/mediatek/device/tb375fc:tb375fc_device.config",
-        "//common-modules/mediatek/device/tb375fc:tb375fc_p1_rpmb.config",
-        "//device/tb375fc:tb375fc_debug.config",
-        # 修正厂商 defconfig 中依赖 DEVICE_MODULES_REL_DIR 的签名密钥路径。
-        "//common-modules/mediatek:mgk_64_k61_618.config",
-    ],
-    trim_nonlisted_kmi = False,
-    visibility = ["//visibility:public"],
-)
+]
+
+_TB375FC_DIAG_CONFIG = "//device/tb375fc:tb375fc_diag.config"
+_TB375FC_DIAG_CPIO = "//device/tb375fc:diag_generated/tb375fc_diag_payload.cpio"
+_TB375FC_DIAG_PAYLOAD_CONFIG = "//device/tb375fc:tb375fc_diag_payload.config"
+
+[
+    kernel_build(
+        name = name,
+        srcs = _TB375FC_P1_SRCS + extra_srcs,
+        outs = _TB375FC_P1_OUTS,
+        module_outs = _TB375FC_P1_MODULE_OUTS,
+        arch = "arm64",
+        build_config = "//common-modules/mediatek:build.config.mgk.aarch64",
+        check_defconfig = "disabled",
+        # Start with GKI MODULES=y before merging the vendor tristates.
+        defconfig = "arch/arm64/configs/gki_defconfig",
+        pre_defconfig_fragments = [
+            "//common-modules/mediatek/kernel_device_modules-6.18:arch/arm64/configs/mgk_64_k61_defconfig",
+            "//common-modules/mediatek/kernel_device_modules-6.18:kernel/configs/mgk_debug_min.config",
+        ],
+        kconfig_ext = "//common-modules/mediatek/kernel_device_modules-6.18:Kconfig.ext",
+        makefile = ":Makefile",
+        # `modules` is needed for a populated Module.symvers.
+        make_goals = ["Image", "Image.lz4", "modules"],
+        post_defconfig_fragments = [
+            "//common-modules/mediatek/device/tb375fc:tb375fc_device.config",
+            "//common-modules/mediatek/device/tb375fc:tb375fc_p1_rpmb.config",
+            "//device/tb375fc:tb375fc_debug.config",
+            "//common-modules/mediatek:mgk_64_k61_618.config",
+        ] + extra_fragments,
+        trim_nonlisted_kmi = False,
+        visibility = ["//visibility:public"],
+    )
+    for name, extra_srcs, extra_fragments in [
+        ("kernel_aarch64_tb375fc_p1", [], []),
+        ("kernel_aarch64_tb375fc_p1_diag_seed", [], [_TB375FC_DIAG_CONFIG]),
+        ("kernel_aarch64_tb375fc_p1_diag", [_TB375FC_DIAG_CPIO], [_TB375FC_DIAG_CONFIG, _TB375FC_DIAG_PAYLOAD_CONFIG]),
+        (
+            "kernel_aarch64_tb375fc_p1_diag_first_usb",
+            [_TB375FC_DIAG_CPIO],
+            [_TB375FC_DIAG_CONFIG, _TB375FC_DIAG_PAYLOAD_CONFIG, "//device/tb375fc:tb375fc_diag_first_usb.config"],
+        ),
+    ]
+]
